@@ -1064,15 +1064,17 @@ class Kalman(object):
             setattr(self,key,val)
 
         self.x_hat = np.array(x0)
-        self.u = 0
+        #self.u = 0
 
         self.A_coeff = g*self.rho/((self.a+1)*self.m)
         self.B_coeff = self.c1/(2*self.L*(1+self.a))
 
-        self.A = np.array([[1., self.A_coeff*self.gammaV, -self.A_coeff, -self.A_coeff],
-    					[0, 1., 0, 0],
-    					[0, 0, 0., 0],
-    					[0, 0, 0, 0.]])
+        self.A = self.dt * \
+                 np.array([[0., self.A_coeff*self.gammaV, 0., -self.A_coeff],
+                           [1., 0., 0, 0],
+                           [0, 0, 0., 0],
+                           [0, 0, 0, 0.]])
+        self.A += np.eye(4)
         self.C = np.array([[0, 1, 0, 0.],[0, 0, 1, 0.]])
 
     def gen_obs(self, z, v, scale = 1.0):
@@ -1080,13 +1082,12 @@ class Kalman(object):
         y_v = v + np.random.normal(loc=0.,
                     scale=np.sqrt(self.gamma_beta[1,1]))
         y_depth = -z + np.random.normal(loc=0.0,
-                    scale=np.sqrt(self.gamma_beta[0,0]))#testing perfect case
+                    scale=np.sqrt(self.gamma_beta[0,0]))
         return [y_depth, y_v]
 
     def update_kalman(self, u, z, v):
         # update state
-        self.A[0,0] = -self.B_coeff*np.abs(self.x_hat[0]) # x_hat[0]
-        #self.u = u
+        self.A[0,0] = 1 - self.dt*self.B_coeff*np.abs(self.x_hat[0])
         y = self.gen_obs(z, v)
         if self.verbose>0:
             print("x0 initial", self.x_hat)
@@ -1108,7 +1109,7 @@ class Kalman(object):
         return xup, Gup
 
     def kalman_predict(self, xup, Gup, u, A):
-        gamma1 = (A @ Gup @ A.T)*self.dt**2
+        gamma1 = (A @ Gup @ A.T)
         gamma1 += self.gamma_alpha
         x1 = xup + self.f(xup, u)*self.dt
         return x1, gamma1
